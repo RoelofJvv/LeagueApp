@@ -24,6 +24,8 @@ app.get('/', (req, res) => {
 
 app.get('/riot-api', async (req, res) => {
   const summonerName = req.query.summonerName;
+  const spinnerValue = req.query.spinnerValue;
+  const gameMode = req.query.gameMode;
 
   try {
     const response = await axios.get(`https://euw1.api.riotgames.com/lol/summoner/v4/summoners/by-name/${summonerName}`, {
@@ -40,67 +42,76 @@ app.get('/riot-api', async (req, res) => {
         'X-Riot-Token': apiKey
       }
     });
-    const rankInfo = rankedResponse.data[0]; // Assuming there's only one ranked entry
+    const rankInfo = rankedResponse.data.find(entry => entry.queueType === "RANKED_SOLO_5x5");
 
-    // Fetch champion mastery data
-    const championMasteryResponse = await axios.get(`https://euw1.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-summoner/${summonerData.id}`, {
-      headers: {
-        'X-Riot-Token': apiKey
-      }
-    });
-    const championList = championMasteryResponse.data.slice(0, 3);
+    
 
     // Fetch the current game version
     const versionResponse = await axios.get('https://ddragon.leagueoflegends.com/api/versions.json');
     const gameVersion = versionResponse.data[0]; // Assuming the first version is the current one
 
-    // Fetch champion names and map the data
-    const championInfo = await Promise.all(
-      championList.map(async (champion) => {
-        const championId = champion.championId.toString(); // Convert ID to a string
 
-        try {
-          const championMasteryData = await axios.get(
-            `https://ddragon.leagueoflegends.com/cdn/${gameVersion}/data/en_US/champion.json`
-          );
-          const championData = championMasteryData.data.data;
+    // Fetch champion mastery data
+    const championMasteryResponse = await axios.get(`https://euw1.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/${summonerData.puuid}/top?count=3&`, {
+  headers: {
+    'X-Riot-Token': apiKey
+  }
+});
 
-          const matchingChampion = Object.values(championData).find(
-            (champ) => champ.key === championId
-          );
+const championList = championMasteryResponse.data;
 
-          if (matchingChampion) {
-            const championName = matchingChampion.name;
+// Fetch champion names and map the data
+const championInfo = await Promise.all(
+  championList.map(async (champion) => {
+    const championId = champion.championId.toString(); // Convert ID to a string
 
-            return {
-              championName: championName,
-              championPoints: champion.championPoints,
-              championLevel: champion.championLevel,
-            };
-          } else {
-            return {
-              championName: 'Champion Not Found',
-              championPoints: champion.championPoints,
-              championLevel: champion.championLevel,
-            };
-          }
-        } catch (error) {
-          console.error(error);
-          return {
-            championName: 'Error Fetching Champion Data',
-            championPoints: champion.championPoints,
-            championLevel: champion.championLevel,
-          };
-        }
-      })
-    );
+    try {
+      const championMasteryData = await axios.get(
+        `https://ddragon.leagueoflegends.com/cdn/${gameVersion}/data/en_US/champion.json`
+      );
+      const championData = championMasteryData.data.data;
 
-    // Fetch the last 2 match IDs
-    const lastMatchesResponse = await axios.get(`https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/${summonerData.puuid}/ids?start=0&count=2`, {
-      headers: {
-        'X-Riot-Token': apiKey
+      const matchingChampion = Object.values(championData).find(
+        (champ) => champ.key === championId
+      );
+
+      if (matchingChampion) {
+        const championName = matchingChampion.name;
+
+        return {
+          championName: championName,
+          championPoints: champion.championPoints,
+          championLevel: champion.championLevel,
+          
+        };
+      } else {
+        return {
+          championName: 'Champion Not Found',
+          championPoints: champion.championPoints,
+          championLevel: champion.championLevel,
+          
+        };
       }
-    });
+    } catch (error) {
+      console.error(error);
+      return {
+        championName: 'Error Fetching Champion Data',
+        championPoints: champion.championPoints,
+        championLevel: champion.championLevel,
+        
+      };
+    }
+  })
+);
+
+
+// Fetch the last 2 match IDs based on the determined match type
+const lastMatchesResponse = await axios.get(`https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/${summonerData.puuid}/ids?queue=${gameMode}&start=0&count=${spinnerValue}`, {
+  headers: {
+    'X-Riot-Token': apiKey
+  }
+});
+
 
     const lastMatchIds = lastMatchesResponse.data;
 
@@ -166,14 +177,17 @@ app.get('/riot-api', async (req, res) => {
     );
 
     // Send back the combined data
-    res.json({
-      rankTier: rankInfo.tier,
-      rankInfo: rankInfo.tier !== 'No Rank' ? `Rank: ${rankInfo.tier} ${rankInfo.rank}` : 'No Rank',
-      championList: championInfo,
-      winrate: rankInfo.losses !== 0 ? ((parseInt(rankInfo.wins, 10) / ((parseInt(rankInfo.losses, 10) + parseInt(rankInfo.wins, 10)))) * 100).toFixed(2) : "N/A",
-      lastMatches: lastMatchesDetails,
-      gameVersion: gameVersion.toString(),
-    });
+res.json({
+  rankTier: rankInfo && rankInfo.tier !== 'No Rank' ? `${rankInfo.tier}` : 'No Rank',
+  rankInfo: rankInfo && rankInfo.tier !== 'No Rank' ? `Rank: ${rankInfo.tier} ${rankInfo.rank}` : 'No Rank',
+  championList: championInfo,
+  winrate: rankInfo && rankInfo.losses !== 0
+    ? ((Number(rankInfo.wins) / (Number(rankInfo.losses) + Number(rankInfo.wins))) * 100).toFixed(2)
+    : "N/A",
+  lastMatches: lastMatchesDetails,
+  gameVersion: gameVersion.toString(),
+});
+
 
   } catch (error) {
     console.error(error);
