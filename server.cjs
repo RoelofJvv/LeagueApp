@@ -3,7 +3,7 @@ const express = require('express');
 const axios = require('axios');
 const app = express();
 const helmet = require('helmet');
-const port = 3000;
+const port = process.env.RAILWAY_PORT || 3000;
 const apiKey = 'RGAPI-19840061-d645-4c33-a52c-a98a8c117b51';
 
 app.use(
