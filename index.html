@@ -135,7 +135,12 @@
                         const championItem = document.createElement('li');
 
                         const championImage = document.createElement('img');
-                        championImage.src = `https://ddragon.leagueoflegends.com/cdn/13.12.1/img/champion/${champion.championName}.png`;
+
+                        // Fetch the current game version
+                        const versionResponse = await axios.get('https://ddragon.leagueoflegends.com/api/versions.json');
+                        const gameVersion = versionResponse.data[0]; // Assuming the first version is the current one
+                       
+                        championImage.src = `https://ddragon.leagueoflegends.com/cdn/'gameVersion'/img/champion/${champion.championName}.png`;
                         championImage.alt = champion.championName;
                         championItem.appendChild(championImage);
 
