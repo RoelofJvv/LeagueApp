@@ -3,9 +3,9 @@ const express = require('express');
 const axios = require('axios');
 const app = express();
 const helmet = require('helmet');
-const port = process.env.PORT || 3000;
-const apiKey = process.env.RIOT_API_KEY; // Use Railway's environment variable for API key
-let version = 0;
+const port = 3000;
+const apiKey = 'RGAPI-19840061-d645-4c33-a52c-a98a8c117b51';
+var version = 0;
 
 app.use(
   helmet.contentSecurityPolicy({
@@ -36,6 +36,7 @@ app.get('/riot-api', async (req, res) => {
       }
     });
 
+
     const summonerData2 = response2.data;
 
     const response = await axios.get(`https://euw1.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${summonerData2.puuid}`, {
@@ -54,67 +55,77 @@ app.get('/riot-api', async (req, res) => {
     });
     const rankInfo = rankedResponse.data.find(entry => entry.queueType === "RANKED_SOLO_5x5");
 
+    
+
     // Fetch the current game version
     const versionResponse = await axios.get('https://ddragon.leagueoflegends.com/api/versions.json');
     const gameVersion = versionResponse.data[0]; // Assuming the first version is the current one
     version = gameVersion;
 
+
     // Fetch champion mastery data
     const championMasteryResponse = await axios.get(`https://euw1.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/${summonerData.puuid}/top?count=3&`, {
-      headers: {
-        'X-Riot-Token': apiKey
+  headers: {
+    'X-Riot-Token': apiKey
+  }
+});
+
+
+
+const championList = championMasteryResponse.data;
+
+// Fetch champion names and map the data
+const championInfo = await Promise.all(
+  championList.map(async (champion) => {
+    const championId = champion.championId.toString(); // Convert ID to a string
+
+    try {
+      const championMasteryData = await axios.get(
+        `https://ddragon.leagueoflegends.com/cdn/${gameVersion}/data/en_US/champion.json`
+      );
+      const championData = championMasteryData.data.data;
+
+      const matchingChampion = Object.values(championData).find(
+        (champ) => champ.key === championId
+      );
+
+      if (matchingChampion) {
+        const championName = matchingChampion.name;
+
+        return {
+          championName: championName,
+          championPoints: champion.championPoints,
+          championLevel: champion.championLevel,
+          
+        };
+      } else {
+        return {
+          championName: 'Champion Not Found',
+          championPoints: champion.championPoints,
+          championLevel: champion.championLevel,
+          
+        };
       }
-    });
+    } catch (error) {
+      console.error(error);
+      return {
+        championName: 'Error Fetching Champion Data',
+        championPoints: champion.championPoints,
+        championLevel: champion.championLevel,
+        
+      };
+    }
+  })
+);
 
-    const championList = championMasteryResponse.data;
 
-    // Fetch champion names and map the data
-    const championInfo = await Promise.all(
-      championList.map(async (champion) => {
-        const championId = champion.championId.toString(); // Convert ID to a string
+// Fetch the last 2 match IDs based on the determined match type
+const lastMatchesResponse = await axios.get(`https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/${summonerData.puuid}/ids?queue=${gameMode}&start=0&count=${spinnerValue}`, {
+  headers: {
+    'X-Riot-Token': apiKey
+  }
+});
 
-        try {
-          const championMasteryData = await axios.get(
-            `https://ddragon.leagueoflegends.com/cdn/${gameVersion}/data/en_US/champion.json`
-          );
-          const championData = championMasteryData.data.data;
-
-          const matchingChampion = Object.values(championData).find(
-            (champ) => champ.key === championId
-          );
-
-          if (matchingChampion) {
-            const championName = matchingChampion.name;
-
-            return {
-              championName: championName,
-              championPoints: champion.championPoints,
-              championLevel: champion.championLevel,
-            };
-          } else {
-            return {
-              championName: 'Champion Not Found',
-              championPoints: champion.championPoints,
-              championLevel: champion.championLevel,
-            };
-          }
-        } catch (error) {
-          console.error(error);
-          return {
-            championName: 'Error Fetching Champion Data',
-            championPoints: champion.championPoints,
-            championLevel: champion.championLevel,
-          };
-        }
-      })
-    );
-
-    // Fetch the last 2 match IDs based on the determined match type
-    const lastMatchesResponse = await axios.get(`https://europe.api.riotgames.com/lol/match/v5/matches/by-puuid/${summonerData.puuid}/ids?queue=${gameMode}&start=0&count=${spinnerValue}`, {
-      headers: {
-        'X-Riot-Token': apiKey
-      }
-    });
 
     const lastMatchIds = lastMatchesResponse.data;
 
@@ -173,22 +184,24 @@ app.get('/riot-api', async (req, res) => {
             kills: 0,
             deaths: 0,
             assists: 0,
+            
           };
         }
       })
     );
 
     // Send back the combined data
-    res.json({
-      rankTier: rankInfo && rankInfo.tier !== 'No Rank' ? `${rankInfo.tier}` : 'No Rank',
-      rankInfo: rankInfo && rankInfo.tier !== 'No Rank' ? `Rank: ${rankInfo.tier} ${rankInfo.rank}` : 'No Rank',
-      championList: championInfo,
-      winrate: rankInfo && rankInfo.losses !== 0
-        ? ((Number(rankInfo.wins) / (Number(rankInfo.losses) + Number(rankInfo.wins))) * 100).toFixed(2)
-        : "N/A",
-      lastMatches: lastMatchesDetails,
-      gameVersion: gameVersion.toString(),
-    });
+res.json({
+  rankTier: rankInfo && rankInfo.tier !== 'No Rank' ? `${rankInfo.tier}` : 'No Rank',
+  rankInfo: rankInfo && rankInfo.tier !== 'No Rank' ? `Rank: ${rankInfo.tier} ${rankInfo.rank}` : 'No Rank',
+  championList: championInfo,
+  winrate: rankInfo && rankInfo.losses !== 0
+    ? ((Number(rankInfo.wins) / (Number(rankInfo.losses) + Number(rankInfo.wins))) * 100).toFixed(2)
+    : "N/A",
+  lastMatches: lastMatchesDetails,
+  gameVersion: gameVersion.toString(),
+});
+
 
   } catch (error) {
     console.error(error);
