@@ -50,6 +50,10 @@
         <input type="text" id="summonerName" placeholder="Enter summoner name">
     </div>
     <div>
+        <label for="tagLine">TagLine #:</label>
+        <input type="text" id="tagLine" placeholder="Enter tagline">
+    </div>
+    <div>
         <label for="spinnerValue">Number of Matches:</label>
         <input type="number" id="spinnerValue" min="0" max="20" value="0">
     </div>
@@ -76,15 +80,7 @@
         <ul id="lastMatch"></ul>
     </div>
     <script>
-
-        document.getElementById('requestButton').addEventListener('click', makeRiotAPIRequest);
-        document.getElementById('summonerName').addEventListener('keyup', function(event) {
-            if (event.key === 'Enter') {
-                makeRiotAPIRequest();
-            }
-        });
-
-
+        var version = 0;
 
         document.getElementById('requestButton').addEventListener('click', makeRiotAPIRequest);
         document.getElementById('summonerName').addEventListener('keyup', function(event) {
@@ -106,15 +102,18 @@
             showLoadingSpinner();
 
             const summonerName = document.getElementById('summonerName').value;
+            const tagLine = document.getElementById('tagLine').value;
             const spinnerValue = document.getElementById('spinnerValue').value;
             const gameMode = document.getElementById('gameMode').value;
-            
+
+
 
             // Send the summoner name to the server for processing
-            fetch(`/riot-api?summonerName=${summonerName}&spinnerValue=${spinnerValue}&gameMode=${gameMode}`)
+            fetch(`/riot-api?summonerName=${summonerName}&tagLine${tagLine}&spinnerValue=${spinnerValue}&gameMode=${gameMode}`)
                 .then(response => response.json())
                 .then(data => {
                     // The server will send back the rank and champion data
+                    version = data.gameVersion;
                     const rankInfoElement = document.getElementById('rankInfo');
                     const winrate = data.winrate;
                     var rank = data.rankTier;
@@ -135,12 +134,7 @@
                         const championItem = document.createElement('li');
 
                         const championImage = document.createElement('img');
-
-                        // Fetch the current game version
-                        const versionResponse = await axios.get('https://ddragon.leagueoflegends.com/api/versions.json');
-                        const gameVersion = versionResponse.data[0]; // Assuming the first version is the current one
-                       
-                        championImage.src = `https://ddragon.leagueoflegends.com/cdn/'gameVersion'/img/champion/${champion.championName}.png`;
+                        championImage.src = `https://ddragon.leagueoflegends.com/cdn/${version}/img/champion/${champion.championName}.png`;
                         championImage.alt = champion.championName;
                         championItem.appendChild(championImage);
 
@@ -173,7 +167,7 @@
 const createItemImage = (item) => {
     if (item !== 0 && item) {
     const itemImage = document.createElement('img');
-    itemImage.src = `https://ddragon.leagueoflegends.com/cdn/13.12.1/img/item/${item}.png`;
+    itemImage.src = `https://ddragon.leagueoflegends.com/cdn/${version}/img/item/${item}.png`;
     itemImage.alt = item;
 
     // Set a 1x1 transparent pixel as a fallback
